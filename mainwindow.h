@@ -22,12 +22,11 @@ private slots:
 private:
     void createMenus();
     void startNewGame(int colorCount);
-    void shuffleRemainingTabs(QWidget *excludeWidget);
 
     GameLogic *gameLogic;
     QWidget *centralWidget;
     QGridLayout *layout;
-    int m_columns = 4; // Количество колонок в сетке
+    int m_columns = 4;
 };
 
 #endif // MAINWINDOW_H
