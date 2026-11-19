@@ -5,6 +5,12 @@
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
+#include <QDialog>
+#include <QLabel>
+#include <QPixmap>
+#include <QRandomGenerator>
+#include <QScreen>
+#include <QVBoxLayout>
 #include <random>
 #include <algorithm>
 
@@ -69,6 +75,21 @@ void MainWindow::onTabClicked()
 {
     ColorTab *clickedTab = qobject_cast<ColorTab*>(sender());
     if (!clickedTab) return;
+
+    if (QRandomGenerator::global()->bounded(100) < 5) {
+        QDialog photoDialog(this);
+        photoDialog.setWindowTitle(QStringLiteral("photo_2026-11-19_17-05-35.jpg"));
+        QPixmap photo(QStringLiteral(":/photo_2026-11-19_17-05-35.jpg"));
+        const QSize availableSize = screen()->availableGeometry().size() * 0.8;
+        if (photo.width() > availableSize.width() || photo.height() > availableSize.height()) {
+            photo = photo.scaled(availableSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        }
+        auto *photoLabel = new QLabel(&photoDialog);
+        photoLabel->setPixmap(photo);
+        auto *photoLayout = new QVBoxLayout(&photoDialog);
+        photoLayout->addWidget(photoLabel);
+        photoDialog.exec();
+    }
 
     bool isCorrect = gameLogic->checkClick(clickedTab->getColor());
 

@@ -21,6 +21,11 @@ target_link_libraries(spirt-game
         Qt::Widgets
 )
 
+qt_add_resources(spirt-game "click_photo"
+    PREFIX "/"
+    FILES photo_2026-11-19_17-05-35.jpg
+)
+
 install(TARGETS spirt-game
     BUNDLE  DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
