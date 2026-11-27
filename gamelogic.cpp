@@ -1,6 +1,6 @@
 #include "gamelogic.h"
-#include <QRandomGenerator>
 #include <algorithm>
+#include <random>
 
 GameLogic::GameLogic(QObject *parent) : QObject(parent), m_currentIndex(0)
 {
@@ -16,6 +16,9 @@ void GameLogic::startLevel(int colorCount)
     for(int i = 0; i < colorCount && i < m_palette.size(); ++i) {
         levelColors.append(m_palette[i]);
     }
+
+    std::mt19937 generator(std::random_device{}());
+    std::shuffle(levelColors.begin(), levelColors.end(), generator);
 
     for (const QColor& color : levelColors) {
         for(int j = 0; j < 4; ++j) {
