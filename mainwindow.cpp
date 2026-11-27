@@ -14,7 +14,7 @@ MainWindow::MainWindow(QWidget *parent)
     centralWidget = new QWidget(this);
     layout = new QGridLayout(centralWidget);
     setCentralWidget(centralWidget);
-    setWindowTitle("Spirit Game");
+    setWindowTitle("Spirt Game");
     resize(600, 400);
 
     gameLogic = new GameLogic(this);
