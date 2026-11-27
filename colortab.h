@@ -5,6 +5,8 @@
 #include <QColor>
 #include <QString>
 
+class QPaintEvent;
+
 class ColorTab : public QPushButton
 {
     Q_OBJECT
@@ -16,6 +18,9 @@ public:
     static QColor displayColor(QColor color);
     static QString symbolFor(QColor color);
     static QString nameFor(QColor color);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
 
 private:
     void updateAppearance();

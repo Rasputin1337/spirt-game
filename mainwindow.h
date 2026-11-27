@@ -4,9 +4,10 @@
 #include <QElapsedTimer>
 #include <QMainWindow>
 #include <QtTypes>
-#include <array>
 #include "gamelogic.h"
 
+class ErrorCountLabel;
+class HomeWidget;
 class QGridLayout;
 class QLabel;
 class QProgressBar;
@@ -23,7 +24,6 @@ public:
 
 private:
     void createMenus();
-    void createHomePage();
     void showHome();
     void startNewGame(int colorCount);
     void onTabClicked();
@@ -34,16 +34,15 @@ private:
 
     GameLogic *gameLogic;
     QStackedWidget *pages;
-    QWidget *home;
+    HomeWidget *home;
     QWidget *game;
-    std::array<QPushButton *, 3> levelButtons;
-    std::array<QLabel *, 3> levelRecords;
     QGridLayout *board;
     QLabel *target;
     QLabel *targetCaption;
     QLabel *swatch;
-    QLabel *feedback;
-    QLabel *stats;
+    QLabel *tileCount;
+    ErrorCountLabel *errorCount;
+    QLabel *timeAndRecord;
     QProgressBar *progress;
     QPushButton *restart;
     QTimer *timer;

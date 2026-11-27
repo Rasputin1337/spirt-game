@@ -1,17 +1,21 @@
 #include "mainwindow.h"
 #include "colortab.h"
+#include "homewidget.h"
 
 #include <QAction>
 #include <QColor>
+#include <QFontMetrics>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPainter>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSettings>
+#include <QSizePolicy>
 #include <QStackedWidget>
 #include <QString>
 #include <QTimer>
@@ -21,6 +25,62 @@
 #include <QtMinMax>
 #include <algorithm>
 #include <random>
+
+class ErrorCountLabel final : public QLabel
+{
+public:
+    explicit ErrorCountLabel(QWidget *parent) : QLabel(parent)
+    {
+        setObjectName(QStringLiteral("errorCount"));
+        setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        pulse.setSingleShot(true);
+        pulse.setTimerType(Qt::PreciseTimer);
+        connect(&pulse, &QTimer::timeout, this, [this] { update(); });
+    }
+
+    void highlight()
+    {
+        pulse.start(1000);
+        update();
+    }
+
+    void clearHighlight()
+    {
+        pulse.stop();
+        update();
+    }
+
+    QSize sizeHint() const override
+    {
+        const QFontMetrics metrics(highlightFont());
+        return QSize(metrics.horizontalAdvance(text()), metrics.height());
+    }
+
+    QSize minimumSizeHint() const override { return sizeHint(); }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        const bool highlighted = pulse.isActive();
+        painter.setFont(highlighted ? highlightFont() : font());
+        painter.setPen(highlighted ? QColor("#FF7070") : palette().color(QPalette::WindowText));
+        painter.drawText(rect(), Qt::AlignLeft | Qt::AlignVCenter, text());
+    }
+
+private:
+    QFont highlightFont() const
+    {
+        QFont larger = font();
+        if (larger.pixelSize() > 0)
+            larger.setPixelSize(larger.pixelSize() + 2);
+        else
+            larger.setPointSizeF(larger.pointSizeF() + 1.5);
+        return larger;
+    }
+
+    QTimer pulse;
+};
 
 namespace {
 QString timeText(qint64 milliseconds)
@@ -47,29 +107,31 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle(QStringLiteral("Spirit Game"));
     resize(640, 590);
     setStyleSheet(QStringLiteral(
-        "QMainWindow, QStackedWidget#pages { background: #111827; color: #edf2ff; }"
-        "QMenuBar, QMenu { background: #1b2740; color: #edf2ff; }"
-        "QMenuBar::item:selected, QMenu::item:selected { background: #34496f; }"
-        "QStackedWidget#pages QLabel { color: #edf2ff; }"
+        "QMainWindow, QStackedWidget#pages { background: #121212; color: #F2F2F2; }"
+        "QMenuBar, QMenu { background: #202020; color: #F2F2F2; }"
+        "QMenuBar::item:selected, QMenu::item:selected { background: #3A3A3A; }"
+        "QStackedWidget#pages QLabel { color: #F2F2F2; }"
         "QLabel#homeTitle { font-size: 44px; font-weight: 800; }"
         "QLabel#title, QLabel#targetName { font-size: 24px; font-weight: 800; }"
-        "QLabel#feedback, QLabel#targetCaption, QLabel#levelRecord { color: #c1cee6; }"
-        "QWidget#targetPanel, QWidget#levelCard { background: #1b2740; border-radius: 14px; }"
+        "QLabel#targetCaption, QLabel#levelRecord { color: #C7C7C7; }"
+        "QWidget#targetPanel, QWidget#levelCard { background: #202020; border-radius: 14px; }"
         "QPushButton#restart, QPushButton#homeButton, QPushButton#levelButton {"
-        " background: #263654; color: #ffffff;"
+        " background: #2B2B2B; color: #ffffff;"
         " border: 2px solid transparent; border-radius: 9px; padding: 8px 14px; }"
         "QPushButton#levelButton { font-size: 17px; font-weight: 700; padding: 12px; }"
         "QPushButton#restart:hover, QPushButton#homeButton:hover,"
-        " QPushButton#levelButton:hover { background: #34496f; }"
+        " QPushButton#levelButton:hover { background: #3A3A3A; }"
         "QPushButton#restart:focus, QPushButton#homeButton:focus,"
-        " QPushButton#levelButton:focus { border-color: #b6cbff; }"
-        "QProgressBar { background: #263654; border: 0; border-radius: 4px; }"
-        "QProgressBar::chunk { background: #91a7ff; border-radius: 4px; }"));
+        " QPushButton#levelButton:focus { border-color: #BDBDBD; }"
+        "QProgressBar { background: #2B2B2B; border: 0; border-radius: 4px; }"
+        "QProgressBar::chunk { background: #BDBDBD; border-radius: 4px; }"));
 
     pages = new QStackedWidget(this);
     pages->setObjectName(QStringLiteral("pages"));
     setCentralWidget(pages);
-    createHomePage();
+    home = new HomeWidget(pages);
+    pages->addWidget(home);
+    connect(home, &HomeWidget::difficultySelected, this, &MainWindow::startNewGame);
     game = new QWidget(pages);
     pages->addWidget(game);
     auto *page = new QVBoxLayout(game);
@@ -108,17 +170,21 @@ MainWindow::MainWindow(QWidget *parent)
     targetText->addWidget(targetCaption);
     targetText->addWidget(target);
     targetLayout->addLayout(targetText, 1);
-    stats = new QLabel(game);
-    stats->setWordWrap(true);
+    auto *stats = new QHBoxLayout;
+    stats->setSpacing(0);
+    tileCount = new QLabel(game);
+    errorCount = new ErrorCountLabel(game);
+    timeAndRecord = new QLabel(game);
+    timeAndRecord->setWordWrap(true);
+    stats->addWidget(tileCount);
+    stats->addWidget(errorCount);
+    stats->addWidget(timeAndRecord, 1);
     progress = new QProgressBar(game);
     progress->setAccessibleName(QStringLiteral("Убрано плиток"));
     progress->setTextVisible(false);
     progress->setFixedHeight(8);
-    feedback = new QLabel(game);
-    feedback->setObjectName(QStringLiteral("feedback"));
-    feedback->setWordWrap(true);
     page->addWidget(targetPanel);
-    page->addWidget(stats);
+    page->addLayout(stats);
     page->addWidget(progress);
 
     auto *field = new QWidget(game);
@@ -126,73 +192,23 @@ MainWindow::MainWindow(QWidget *parent)
     board->setContentsMargins(0, 0, 0, 0);
     board->setSpacing(10);
     page->addWidget(field, 1);
-    page->addWidget(feedback);
 
     connect(timer, &QTimer::timeout, this, &MainWindow::updateStats);
     createMenus();
     showHome();
 }
 
-void MainWindow::createHomePage()
-{
-    home = new QWidget(pages);
-    pages->addWidget(home);
-    auto *layout = new QVBoxLayout(home);
-    layout->setContentsMargins(30, 26, 30, 26);
-    layout->setSpacing(16);
-    layout->addStretch();
-
-    auto *title = new QLabel(QStringLiteral("Spirit Game"), home);
-    title->setObjectName(QStringLiteral("homeTitle"));
-    layout->addWidget(title);
-    auto *instructions = new QLabel(QStringLiteral(
-        "Выбери сложность и очисти поле. Убирай плитки по подсказке над полем. "
-        "Рекорд засчитывается за раунд без ошибок."), home);
-    instructions->setWordWrap(true);
-    layout->addWidget(instructions);
-
-    const std::array<QString, 3> names = {
-        QStringLiteral("Лёгкая"), QStringLiteral("Средняя"), QStringLiteral("Сложная")
-    };
-    for (int index = 0; index < int(names.size()); ++index) {
-        const int colors = index + 2;
-        auto *card = new QWidget(home);
-        card->setObjectName(QStringLiteral("levelCard"));
-        auto *row = new QHBoxLayout(card);
-        row->setContentsMargins(10, 10, 16, 10);
-        row->setSpacing(16);
-        auto *button = new QPushButton(names[index], card);
-        button->setObjectName(QStringLiteral("levelButton"));
-        button->setMinimumWidth(130);
-        button->setAccessibleDescription(QStringLiteral("%1 цвета, %2 плиток")
-                                         .arg(colors).arg(colors * 4));
-        connect(button, &QPushButton::clicked, this, [this, colors] { startNewGame(colors); });
-        levelButtons[index] = button;
-        auto *details = new QVBoxLayout;
-        details->setSpacing(3);
-        details->addWidget(new QLabel(QStringLiteral("%1 цвета · %2 плиток")
-                                      .arg(colors).arg(colors * 4), card));
-        auto *record = new QLabel(card);
-        record->setObjectName(QStringLiteral("levelRecord"));
-        levelRecords[index] = record;
-        details->addWidget(record);
-        row->addWidget(button);
-        row->addLayout(details, 1);
-        layout->addWidget(card);
-    }
-    layout->addStretch();
-}
-
 void MainWindow::showHome()
 {
     timer->stop();
+    errorCount->clearHighlight();
     QSettings settings(QStringLiteral("SpiritGame"), QStringLiteral("SpiritGame"));
-    for (int index = 0; index < int(levelRecords.size()); ++index) {
-        const auto record = settings.value(recordKey(index + 2), 0).toLongLong();
-        levelRecords[index]->setText(QStringLiteral("Рекорд %1").arg(recordText(record)));
+    for (int colors = 2; colors <= 4; ++colors) {
+        const auto record = settings.value(recordKey(colors), 0).toLongLong();
+        home->setRecord(colors, recordText(record));
     }
     pages->setCurrentWidget(home);
-    levelButtons[difficulty - 2]->setFocus();
+    home->setSelectedDifficulty(difficulty);
 }
 
 void MainWindow::createMenus()
@@ -222,6 +238,7 @@ void MainWindow::startNewGame(int colorCount)
     difficulty = colorCount;
     cleared = 0;
     mistakes = 0;
+    errorCount->clearHighlight();
     finishTime = 0;
     bestTime = QSettings(QStringLiteral("SpiritGame"), QStringLiteral("SpiritGame"))
         .value(recordKey(difficulty), 0).toLongLong();
@@ -242,7 +259,6 @@ void MainWindow::startNewGame(int colorCount)
     }
 
     progress->setRange(0, colors.size());
-    feedback->setText(QStringLiteral("Убирай плитки с белой рамкой."));
     pages->setCurrentWidget(game);
     clock.start();
     timer->start(100);
@@ -257,7 +273,7 @@ void MainWindow::updateRound()
         target->setText(ColorTab::nameFor(color));
         swatch->setText(ColorTab::symbolFor(color));
         swatch->setStyleSheet(QStringLiteral(
-            "QLabel { background: %1; color: #101625; border: 3px solid white;"
+            "QLabel { background: %1; color: #121212; border: 3px solid white;"
             " border-radius: 12px; font-size: 27px; font-weight: 700; }")
             .arg(ColorTab::displayColor(color).name()));
     }
@@ -276,9 +292,12 @@ qint64 MainWindow::elapsedMs() const
 
 void MainWindow::updateStats()
 {
-    stats->setText(QStringLiteral("Плитки %1/%2   ·   Ошибки %3   ·   %4   ·   Рекорд %5")
-                   .arg(cleared).arg(progress->maximum()).arg(mistakes)
-                   .arg(timeText(elapsedMs()), recordText(bestTime)));
+    tileCount->setText(QStringLiteral("Плитки %1/%2   ·   ").arg(cleared).arg(progress->maximum()));
+    const QString errors = QStringLiteral("Ошибки %1").arg(mistakes);
+    if (errorCount->text() != errors)
+        errorCount->setText(errors);
+    timeAndRecord->setText(QStringLiteral("   ·   %1   ·   Рекорд %2")
+                           .arg(timeText(elapsedMs()), recordText(bestTime)));
 }
 
 void MainWindow::finishRound()
@@ -298,8 +317,6 @@ void MainWindow::finishRound()
     swatch->setStyleSheet(QStringLiteral(
         "QLabel { background: #bbf7d0; color: #14532d; border-radius: 12px;"
         " font-size: 27px; font-weight: 700; }"));
-    feedback->setText(record ? QStringLiteral("Новый рекорд: %1").arg(timeText(finishTime))
-                             : QStringLiteral("Ещё раунд? Нажми «Заново» или Ctrl+R."));
     restart->setFocus();
 }
 
@@ -310,8 +327,8 @@ void MainWindow::onTabClicked()
 
     if (!gameLogic->checkClick(tile->getColor())) {
         ++mistakes;
-        feedback->setText(QStringLiteral("Эта плитка другого цвета. Следуй подсказке над полем."));
         updateStats();
+        errorCount->highlight();
         return;
     }
 
@@ -319,7 +336,6 @@ void MainWindow::onTabClicked()
     board->removeWidget(tile);
     tile->hide();
     tile->deleteLater();
-    feedback->setText(QStringLiteral("Убирай плитки с белой рамкой."));
     updateRound();
     if (gameLogic->isLevelComplete()) finishRound();
 }

@@ -1,6 +1,8 @@
 #include "colortab.h"
 #include <QCursor>
 #include <QSizePolicy>
+#include <QStyleOptionButton>
+#include <QStylePainter>
 
 ColorTab::ColorTab(QColor color, QWidget *parent) : QPushButton(parent), m_color(color)
 {
@@ -18,7 +20,16 @@ void ColorTab::setTarget(bool target)
     if (m_target == target) return;
     m_target = target;
     setAccessibleDescription(target ? QStringLiteral("Текущая цель") : QString());
-    updateAppearance();
+}
+
+void ColorTab::paintEvent(QPaintEvent *)
+{
+    QStyleOptionButton option;
+    initStyleOption(&option);
+    option.state.setFlag(QStyle::State_HasFocus, false);
+
+    QStylePainter painter(this);
+    painter.drawControl(QStyle::CE_PushButton, option);
 }
 
 QColor ColorTab::displayColor(QColor color)
@@ -29,20 +40,14 @@ QColor ColorTab::displayColor(QColor color)
 void ColorTab::updateAppearance()
 {
     const QColor bright = displayColor(m_color);
-    const QColor fill = m_target ? bright
-        : QColor::fromRgb((bright.red() + 27) / 2, (bright.green() + 39) / 2,
-                          (bright.blue() + 64) / 2);
-    const QColor ink = m_target ? QColor("#101625") : QColor("#ffffff");
+    const QColor fill = QColor::fromRgb((bright.red() + 27) / 2, (bright.green() + 39) / 2,
+                                        (bright.blue() + 64) / 2);
     setStyleSheet(QStringLiteral(
-        "QPushButton { background: %1; color: %2; border: 4px solid %3;"
+        "QPushButton { background: %1; color: #ffffff; border: none;"
         " border-radius: 14px; font-size: 27px; font-weight: 700; }"
-        "QPushButton:hover { background: %4; }"
-        "QPushButton:focus { border-style: dashed; border-color: %6; }"
-        "QPushButton:pressed { background: %5; }")
-        .arg(fill.name(), ink.name(), m_target ? QStringLiteral("#ffffff")
-                                              : QStringLiteral("#263654"),
-             fill.lighter(108).name(), fill.darker(108).name(),
-             m_target ? QStringLiteral("#ffffff") : QStringLiteral("#172554")));
+        "QPushButton:hover { background: %2; }"
+        "QPushButton:pressed { background: %3; }")
+        .arg(fill.name(), fill.lighter(108).name(), fill.darker(108).name()));
 }
 
 QColor ColorTab::getColor() const
