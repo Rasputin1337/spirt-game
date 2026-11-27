@@ -101,18 +101,6 @@ QString recordKey(int difficulty)
     return QStringLiteral("records/%1").arg(difficulty);
 }
 
-void migrateRecords()
-{
-    auto current = gameSettings();
-    const auto legacyName = QStringLiteral("SpiritGame");
-    const QSettings legacy(QSettings::defaultFormat(), QSettings::UserScope, legacyName, legacyName);
-    for (int colors = 2; colors <= 4; ++colors) {
-        const auto key = recordKey(colors);
-        if (!current.contains(key) && legacy.contains(key))
-            current.setValue(key, legacy.value(key));
-    }
-}
-
 QString recordText(qint64 milliseconds)
 {
     return milliseconds > 0 ? timeText(milliseconds) : QStringLiteral("—");
@@ -125,7 +113,6 @@ MainWindow::MainWindow(QWidget *parent)
     , timer(new QTimer(this))
 {
     setWindowTitle(QStringLiteral("Spirt Game"));
-    migrateRecords();
     resize(640, 590);
     setStyleSheet(QStringLiteral(
         "QMainWindow, QStackedWidget#pages { background: #121212; color: #F2F2F2; }"
