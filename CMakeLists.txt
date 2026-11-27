@@ -17,6 +17,7 @@ qt_add_executable(spirt-game
     homewidget.h homewidget.cpp
     colortab.h colortab.cpp
     gamelogic.h gamelogic.cpp
+    gamestate.h gamestate.cpp
     scoremanager.h scoremanager.cpp
 )
 

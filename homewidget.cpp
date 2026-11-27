@@ -1,4 +1,5 @@
 #include "homewidget.h"
+#include "gamestate.h"
 
 #include <QEasingCurve>
 #include <QEvent>
@@ -77,11 +78,15 @@ HomeWidget::HomeWidget(QWidget *parent)
 
 void HomeWidget::setRecord(int colorCount, const QString &record)
 {
+    if (!GameState::isValidDifficulty(colorCount))
+        return;
     levelRecords[colorCount - 2]->setText(QStringLiteral("Рекорд %1").arg(record));
 }
 
 void HomeWidget::setSelectedDifficulty(int colorCount)
 {
+    if (!GameState::isValidDifficulty(colorCount))
+        return;
     selectedDifficulty = colorCount;
     if (introFinished)
         levelButtons[colorCount - 2]->setFocus();

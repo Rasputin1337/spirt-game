@@ -2,25 +2,23 @@
 #define GAMELOGIC_H
 
 #include <QObject>
-#include <QColor>
-#include <QVector>
+#include "gamestate.h"
 
 class GameLogic : public QObject
 {
     Q_OBJECT
 public:
-    explicit GameLogic(QObject *parent = nullptr);
+    enum class ClickResult { Ignored, Mistake, Correct, Completed, NewRecord };
 
-    void startLevel(int colorCount);
-    bool checkClick(QColor color);
+    explicit GameLogic(QObject *parent = nullptr);
+    QVector<QColor> startLevel(int colorCount, qint64 bestTime);
+    void abandonRound();
+    ClickResult checkClick(QColor color, qint64 elapsedMs);
     QColor getCurrentTargetColor() const;
-    bool isLevelComplete() const;
-    QVector<QColor> getAllColorsForLevel() const;
+    const GameState &state() const { return m_state; }
 
 private:
-    QVector<QColor> m_sequence;
-    int m_currentIndex;
-    QVector<QColor> m_palette;
+    GameState m_state;
 };
 
 #endif // GAMELOGIC_H

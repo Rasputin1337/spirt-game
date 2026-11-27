@@ -1,56 +1,69 @@
 #include "gamelogic.h"
+#include <QtMinMax>
 #include <algorithm>
 #include <random>
+#include <utility>
 
-GameLogic::GameLogic(QObject *parent) : QObject(parent), m_currentIndex(0)
+GameLogic::GameLogic(QObject *parent) : QObject(parent)
+{}
+
+QVector<QColor> GameLogic::startLevel(int colorCount, qint64 bestTime)
 {
-    m_palette = {Qt::red, Qt::blue, Qt::green, Qt::yellow, Qt::magenta, Qt::cyan};
-}
+    if (!GameState::isValidDifficulty(colorCount))
+        return {};
 
-void GameLogic::startLevel(int colorCount)
-{
-    m_sequence.clear();
-    m_currentIndex = 0;
-
-    QVector<QColor> levelColors;
-    for(int i = 0; i < colorCount && i < m_palette.size(); ++i) {
-        levelColors.append(m_palette[i]);
-    }
-
+    QVector<QColor> levelColors = {Qt::red, Qt::blue, Qt::green, Qt::yellow};
+    levelColors.resize(colorCount);
     std::mt19937 generator(std::random_device{}());
     std::shuffle(levelColors.begin(), levelColors.end(), generator);
 
-    for (const QColor& color : levelColors) {
-        for(int j = 0; j < 4; ++j) {
-            m_sequence.append(color);
-        }
+    GameState next;
+    next.m_difficulty = colorCount;
+    next.m_bestTime = bestTime;
+    next.m_status = GameState::Status::Active;
+    for (const QColor &color : levelColors) {
+        for (int i = 0; i < 4; ++i)
+            next.m_sequence.append(color);
     }
+
+    auto board = next.m_sequence;
+    std::mt19937 boardGenerator(std::random_device{}());
+    std::shuffle(board.begin(), board.end(), boardGenerator);
+    m_state = std::move(next);
+    return board;
 }
 
-bool GameLogic::checkClick(QColor color)
+void GameLogic::abandonRound()
 {
-    if (m_currentIndex >= m_sequence.size()) return false;
-    if (m_sequence[m_currentIndex] == color) {
-        m_currentIndex++;
-        return true;
+    if (m_state.m_status == GameState::Status::Active)
+        m_state.m_status = GameState::Status::Abandoned;
+}
+
+GameLogic::ClickResult GameLogic::checkClick(QColor color, qint64 elapsedMs)
+{
+    if (m_state.m_status != GameState::Status::Active)
+        return ClickResult::Ignored;
+
+    if (color != getCurrentTargetColor()) {
+        ++m_state.m_mistakes;
+        return ClickResult::Mistake;
     }
-    return false;
+
+    if (++m_state.m_position < m_state.m_sequence.size())
+        return ClickResult::Correct;
+
+    m_state.m_status = GameState::Status::Completed;
+    m_state.m_finishTime = qMax<qint64>(1, elapsedMs);
+    if (m_state.m_mistakes == 0
+        && (m_state.m_bestTime <= 0 || m_state.m_finishTime < m_state.m_bestTime)) {
+        m_state.m_bestTime = m_state.m_finishTime;
+        return ClickResult::NewRecord;
+    }
+    return ClickResult::Completed;
 }
 
 QColor GameLogic::getCurrentTargetColor() const
 {
-    if (m_currentIndex < m_sequence.size()) {
-        return m_sequence[m_currentIndex];
-    }
-    return QColor();
-}
-
-bool GameLogic::isLevelComplete() const
-{
-    return m_currentIndex >= m_sequence.size();
-}
-
-QVector<QColor> GameLogic::getAllColorsForLevel() const
-{
-    return m_sequence;
+    return m_state.m_status == GameState::Status::Active
+        ? m_state.m_sequence[m_state.m_position] : QColor();
 }

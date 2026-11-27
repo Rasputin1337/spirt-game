@@ -29,7 +29,7 @@ private:
     void onTabClicked();
     void updateRound();
     void updateStats();
-    void finishRound();
+    void finishRound(bool newRecord);
     qint64 elapsedMs() const;
 
     GameLogic *gameLogic;
@@ -47,11 +47,6 @@ private:
     QPushButton *restart;
     QTimer *timer;
     QElapsedTimer clock;
-    int difficulty = 2;
-    int cleared = 0;
-    int mistakes = 0;
-    qint64 bestTime = 0;
-    qint64 finishTime = 0;
 };
 
 #endif // MAINWINDOW_H

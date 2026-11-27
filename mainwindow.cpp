@@ -22,9 +22,6 @@
 #include <QVariant>
 #include <QVBoxLayout>
 #include <QWidget>
-#include <QtMinMax>
-#include <algorithm>
-#include <random>
 
 class ErrorCountLabel final : public QLabel
 {
@@ -90,6 +87,12 @@ QString timeText(qint64 milliseconds)
         .arg(seconds % 60, 2, 10, QLatin1Char('0')).arg(milliseconds / 100 % 10);
 }
 
+QSettings gameSettings()
+{
+    return QSettings(QSettings::defaultFormat(), QSettings::UserScope,
+                     QStringLiteral("SpiritGame"), QStringLiteral("SpiritGame"));
+}
+
 QString recordKey(int difficulty)
 {
     return QStringLiteral("records/%1").arg(difficulty);
@@ -146,7 +149,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(homeButton, &QPushButton::clicked, this, &MainWindow::showHome);
     restart = new QPushButton(QStringLiteral("Заново"), game);
     restart->setObjectName(QStringLiteral("restart"));
-    connect(restart, &QPushButton::clicked, this, [this] { startNewGame(difficulty); });
+    connect(restart, &QPushButton::clicked, this, [this] { startNewGame(gameLogic->state().difficulty()); });
     header->addWidget(title, 1);
     header->addWidget(homeButton);
     header->addWidget(restart);
@@ -201,14 +204,15 @@ MainWindow::MainWindow(QWidget *parent)
 void MainWindow::showHome()
 {
     timer->stop();
+    gameLogic->abandonRound();
     errorCount->clearHighlight();
-    QSettings settings(QStringLiteral("SpiritGame"), QStringLiteral("SpiritGame"));
+    const auto settings = gameSettings();
     for (int colors = 2; colors <= 4; ++colors) {
         const auto record = settings.value(recordKey(colors), 0).toLongLong();
         home->setRecord(colors, recordText(record));
     }
     pages->setCurrentWidget(home);
-    home->setSelectedDifficulty(difficulty);
+    home->setSelectedDifficulty(gameLogic->state().difficulty());
 }
 
 void MainWindow::createMenus()
@@ -219,7 +223,7 @@ void MainWindow::createMenus()
     connect(back, &QAction::triggered, this, &MainWindow::showHome);
     auto *replay = menu->addAction(QStringLiteral("Заново"));
     replay->setShortcut(QKeySequence(QStringLiteral("Ctrl+R")));
-    connect(replay, &QAction::triggered, this, [this] { startNewGame(difficulty); });
+    connect(replay, &QAction::triggered, this, [this] { startNewGame(gameLogic->state().difficulty()); });
     menu->addSeparator();
     for (int colors = 2; colors <= 4; ++colors) {
         auto *action = menu->addAction(QStringLiteral("Новая игра (%1 цвета)").arg(colors));
@@ -230,22 +234,19 @@ void MainWindow::createMenus()
 
 void MainWindow::startNewGame(int colorCount)
 {
+    if (!GameState::isValidDifficulty(colorCount))
+        return;
+
+    const auto bestTime = gameSettings()
+        .value(recordKey(colorCount), 0).toLongLong();
+    const auto colors = gameLogic->startLevel(colorCount, bestTime);
+
     while (auto *item = board->takeAt(0)) {
         delete item->widget();
         delete item;
     }
 
-    difficulty = colorCount;
-    cleared = 0;
-    mistakes = 0;
     errorCount->clearHighlight();
-    finishTime = 0;
-    bestTime = QSettings(QStringLiteral("SpiritGame"), QStringLiteral("SpiritGame"))
-        .value(recordKey(difficulty), 0).toLongLong();
-    gameLogic->startLevel(colorCount);
-    auto colors = gameLogic->getAllColorsForLevel();
-    std::mt19937 generator(std::random_device{}());
-    std::shuffle(colors.begin(), colors.end(), generator);
 
     constexpr int columns = 4;
     for (int row = 0; row < columns; ++row) {
@@ -258,7 +259,7 @@ void MainWindow::startNewGame(int colorCount)
         board->addWidget(tile, i / columns, i % columns);
     }
 
-    progress->setRange(0, colors.size());
+    progress->setRange(0, gameLogic->state().tileCount());
     pages->setCurrentWidget(game);
     clock.start();
     timer->start(100);
@@ -281,34 +282,34 @@ void MainWindow::updateRound()
         auto *tile = static_cast<ColorTab *>(board->itemAt(index)->widget());
         tile->setTarget(tile->getColor() == color);
     }
-    progress->setValue(cleared);
+    progress->setValue(gameLogic->state().cleared());
     updateStats();
 }
 
 qint64 MainWindow::elapsedMs() const
 {
-    return finishTime > 0 ? finishTime : clock.elapsed();
+    const auto &state = gameLogic->state();
+    return state.status() == GameState::Status::Completed ? state.finishTime() : clock.elapsed();
 }
 
 void MainWindow::updateStats()
 {
-    tileCount->setText(QStringLiteral("Плитки %1/%2   ·   ").arg(cleared).arg(progress->maximum()));
-    const QString errors = QStringLiteral("Ошибки %1").arg(mistakes);
+    const auto &state = gameLogic->state();
+    tileCount->setText(QStringLiteral("Плитки %1/%2   ·   ").arg(state.cleared()).arg(state.tileCount()));
+    const QString errors = QStringLiteral("Ошибки %1").arg(state.mistakes());
     if (errorCount->text() != errors)
         errorCount->setText(errors);
     timeAndRecord->setText(QStringLiteral("   ·   %1   ·   Рекорд %2")
-                           .arg(timeText(elapsedMs()), recordText(bestTime)));
+                           .arg(timeText(elapsedMs()), recordText(state.bestTime())));
 }
 
-void MainWindow::finishRound()
+void MainWindow::finishRound(bool newRecord)
 {
     timer->stop();
-    finishTime = qMax<qint64>(1, elapsedMs());
-    const bool record = mistakes == 0 && (bestTime <= 0 || finishTime < bestTime);
-    if (record) {
-        bestTime = finishTime;
-        QSettings(QStringLiteral("SpiritGame"), QStringLiteral("SpiritGame"))
-            .setValue(recordKey(difficulty), bestTime);
+    if (newRecord) {
+        const auto &state = gameLogic->state();
+        gameSettings()
+            .setValue(recordKey(state.difficulty()), state.bestTime());
     }
     updateStats();
     targetCaption->setText(QStringLiteral("Раунд завершён"));
@@ -323,19 +324,21 @@ void MainWindow::finishRound()
 void MainWindow::onTabClicked()
 {
     auto *tile = qobject_cast<ColorTab *>(sender());
-    if (!tile || pages->currentWidget() != game || gameLogic->isLevelComplete()) return;
+    if (!tile || pages->currentWidget() != game) return;
 
-    if (!gameLogic->checkClick(tile->getColor())) {
-        ++mistakes;
+    const auto result = gameLogic->checkClick(tile->getColor(), clock.elapsed());
+    if (result == GameLogic::ClickResult::Ignored)
+        return;
+    if (result == GameLogic::ClickResult::Mistake) {
         updateStats();
         errorCount->highlight();
         return;
     }
 
-    ++cleared;
     board->removeWidget(tile);
     tile->hide();
     tile->deleteLater();
     updateRound();
-    if (gameLogic->isLevelComplete()) finishRound();
+    if (result == GameLogic::ClickResult::Completed || result == GameLogic::ClickResult::NewRecord)
+        finishRound(result == GameLogic::ClickResult::NewRecord);
 }
