@@ -19,14 +19,15 @@
 #include <QStackedWidget>
 #include <QString>
 #include <QTimer>
-#include <QVariant>
 #include <QVBoxLayout>
+#include <QVariant>
 #include <QWidget>
 
 class ErrorCountLabel final : public QLabel
 {
 public:
-    explicit ErrorCountLabel(QWidget *parent) : QLabel(parent)
+    explicit ErrorCountLabel(QWidget *parent)
+        : QLabel(parent)
     {
         setObjectName(QStringLiteral("errorCount"));
         setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
@@ -83,14 +84,16 @@ namespace {
 QString timeText(qint64 milliseconds)
 {
     const auto seconds = milliseconds / 1000;
-    return QStringLiteral("%1:%2.%3").arg(seconds / 60)
-        .arg(seconds % 60, 2, 10, QLatin1Char('0')).arg(milliseconds / 100 % 10);
+    return QStringLiteral("%1:%2.%3")
+        .arg(seconds / 60)
+        .arg(seconds % 60, 2, 10, QLatin1Char('0'))
+        .arg(milliseconds / 100 % 10);
 }
 
 QSettings gameSettings()
 {
-    return QSettings(QSettings::defaultFormat(), QSettings::UserScope,
-                     QStringLiteral("SpiritGame"), QStringLiteral("SpiritGame"));
+    const auto name = QStringLiteral("SpirtGame");
+    return QSettings(QSettings::defaultFormat(), QSettings::UserScope, name, name);
 }
 
 QString recordKey(int difficulty)
@@ -98,16 +101,31 @@ QString recordKey(int difficulty)
     return QStringLiteral("records/%1").arg(difficulty);
 }
 
+void migrateRecords()
+{
+    auto current = gameSettings();
+    const auto legacyName = QStringLiteral("SpiritGame");
+    const QSettings legacy(QSettings::defaultFormat(), QSettings::UserScope, legacyName, legacyName);
+    for (int colors = 2; colors <= 4; ++colors) {
+        const auto key = recordKey(colors);
+        if (!current.contains(key) && legacy.contains(key))
+            current.setValue(key, legacy.value(key));
+    }
+}
+
 QString recordText(qint64 milliseconds)
 {
     return milliseconds > 0 ? timeText(milliseconds) : QStringLiteral("—");
 }
-}
+} // namespace
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), gameLogic(new GameLogic(this)), timer(new QTimer(this))
+    : QMainWindow(parent)
+    , gameLogic(new GameLogic(this))
+    , timer(new QTimer(this))
 {
-    setWindowTitle(QStringLiteral("Spirit Game"));
+    setWindowTitle(QStringLiteral("Spirt Game"));
+    migrateRecords();
     resize(640, 590);
     setStyleSheet(QStringLiteral(
         "QMainWindow, QStackedWidget#pages { background: #121212; color: #F2F2F2; }"
@@ -142,14 +160,16 @@ MainWindow::MainWindow(QWidget *parent)
     page->setSpacing(12);
 
     auto *header = new QHBoxLayout;
-    auto *title = new QLabel(QStringLiteral("Spirit Game"), game);
+    auto *title = new QLabel(QStringLiteral("Spirt Game"), game);
     title->setObjectName(QStringLiteral("title"));
     auto *homeButton = new QPushButton(QStringLiteral("В меню"), game);
     homeButton->setObjectName(QStringLiteral("homeButton"));
     connect(homeButton, &QPushButton::clicked, this, &MainWindow::showHome);
     restart = new QPushButton(QStringLiteral("Заново"), game);
     restart->setObjectName(QStringLiteral("restart"));
-    connect(restart, &QPushButton::clicked, this, [this] { startNewGame(gameLogic->state().difficulty()); });
+    connect(restart, &QPushButton::clicked, this, [this] {
+        startNewGame(gameLogic->state().difficulty());
+    });
     header->addWidget(title, 1);
     header->addWidget(homeButton);
     header->addWidget(restart);
@@ -223,7 +243,9 @@ void MainWindow::createMenus()
     connect(back, &QAction::triggered, this, &MainWindow::showHome);
     auto *replay = menu->addAction(QStringLiteral("Заново"));
     replay->setShortcut(QKeySequence(QStringLiteral("Ctrl+R")));
-    connect(replay, &QAction::triggered, this, [this] { startNewGame(gameLogic->state().difficulty()); });
+    connect(replay, &QAction::triggered, this, [this] {
+        startNewGame(gameLogic->state().difficulty());
+    });
     menu->addSeparator();
     for (int colors = 2; colors <= 4; ++colors) {
         auto *action = menu->addAction(QStringLiteral("Новая игра (%1 цвета)").arg(colors));
@@ -237,8 +259,7 @@ void MainWindow::startNewGame(int colorCount)
     if (!GameState::isValidDifficulty(colorCount))
         return;
 
-    const auto bestTime = gameSettings()
-        .value(recordKey(colorCount), 0).toLongLong();
+    const auto bestTime = gameSettings().value(recordKey(colorCount), 0).toLongLong();
     const auto colors = gameLogic->startLevel(colorCount, bestTime);
 
     while (auto *item = board->takeAt(0)) {
@@ -273,10 +294,10 @@ void MainWindow::updateRound()
         targetCaption->setText(QStringLiteral("Нажимай плитки этого цвета"));
         target->setText(ColorTab::nameFor(color));
         swatch->setText(ColorTab::symbolFor(color));
-        swatch->setStyleSheet(QStringLiteral(
-            "QLabel { background: %1; color: #121212; border: 3px solid white;"
-            " border-radius: 12px; font-size: 27px; font-weight: 700; }")
-            .arg(ColorTab::displayColor(color).name()));
+        swatch->setStyleSheet(
+            QStringLiteral("QLabel { background: %1; color: #121212; border: 3px solid white;"
+                           " border-radius: 12px; font-size: 27px; font-weight: 700; }")
+                .arg(ColorTab::displayColor(color).name()));
     }
     for (int index = 0; index < board->count(); ++index) {
         auto *tile = static_cast<ColorTab *>(board->itemAt(index)->widget());
@@ -295,12 +316,13 @@ qint64 MainWindow::elapsedMs() const
 void MainWindow::updateStats()
 {
     const auto &state = gameLogic->state();
-    tileCount->setText(QStringLiteral("Плитки %1/%2   ·   ").arg(state.cleared()).arg(state.tileCount()));
+    tileCount->setText(
+        QStringLiteral("Плитки %1/%2   ·   ").arg(state.cleared()).arg(state.tileCount()));
     const QString errors = QStringLiteral("Ошибки %1").arg(state.mistakes());
     if (errorCount->text() != errors)
         errorCount->setText(errors);
     timeAndRecord->setText(QStringLiteral("   ·   %1   ·   Рекорд %2")
-                           .arg(timeText(elapsedMs()), recordText(state.bestTime())));
+                               .arg(timeText(elapsedMs()), recordText(state.bestTime())));
 }
 
 void MainWindow::finishRound(bool newRecord)
@@ -308,23 +330,23 @@ void MainWindow::finishRound(bool newRecord)
     timer->stop();
     if (newRecord) {
         const auto &state = gameLogic->state();
-        gameSettings()
-            .setValue(recordKey(state.difficulty()), state.bestTime());
+        gameSettings().setValue(recordKey(state.difficulty()), state.bestTime());
     }
     updateStats();
     targetCaption->setText(QStringLiteral("Раунд завершён"));
     target->setText(QStringLiteral("Поле очищено!"));
     swatch->setText(QStringLiteral("✓"));
-    swatch->setStyleSheet(QStringLiteral(
-        "QLabel { background: #bbf7d0; color: #14532d; border-radius: 12px;"
-        " font-size: 27px; font-weight: 700; }"));
+    swatch->setStyleSheet(
+        QStringLiteral("QLabel { background: #bbf7d0; color: #14532d; border-radius: 12px;"
+                       " font-size: 27px; font-weight: 700; }"));
     restart->setFocus();
 }
 
 void MainWindow::onTabClicked()
 {
     auto *tile = qobject_cast<ColorTab *>(sender());
-    if (!tile || pages->currentWidget() != game) return;
+    if (!tile || pages->currentWidget() != game)
+        return;
 
     const auto result = gameLogic->checkClick(tile->getColor(), clock.elapsed());
     if (result == GameLogic::ClickResult::Ignored)

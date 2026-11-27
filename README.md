@@ -65,3 +65,97 @@ classDiagram
 9. Разработана отдельная модель данных GameState, выполнено разделение интерфейса, игровых данных и игровой логики
 
 ## Схема классов проекта
+
+```mermaid
+classDiagram
+    class MainWindow {
+        -GameLogic *gameLogic
+        -HomeWidget *home
+        -ErrorCountLabel *errorCount
+        -QGridLayout *board
+        +MainWindow(QWidget *parent = nullptr)
+        -showHome() void
+        -startNewGame(int colorCount) void
+        -onTabClicked() void
+        -updateRound() void
+        -updateStats() void
+        -finishRound(bool newRecord) void
+    }
+
+    class HomeWidget {
+        -std::array~QPushButton *, 3~ levelButtons
+        -std::array~QLabel *, 3~ levelRecords
+        -int selectedDifficulty
+        +HomeWidget(QWidget *parent = nullptr)
+        +setRecord(int colorCount, const QString &record) void
+        +setSelectedDifficulty(int colorCount) void
+        +difficultySelected(int colorCount) void «signal»
+    }
+
+    class ColorTab {
+        -QColor m_color
+        -bool m_target
+        +ColorTab(QColor color, QWidget *parent = nullptr)
+        +getColor() QColor const
+        +setTarget(bool target) void
+        +displayColor(QColor color) QColor$
+        +symbolFor(QColor color) QString$
+        +nameFor(QColor color) QString$
+        #paintEvent(QPaintEvent *event) void override
+    }
+
+    class ErrorCountLabel {
+        -QTimer pulse
+        +ErrorCountLabel(QWidget *parent)
+        +highlight() void
+        +clearHighlight() void
+        #paintEvent(QPaintEvent *) void override
+    }
+
+    class GameLogic {
+        -GameState m_state
+        +GameLogic(QObject *parent = nullptr)
+        +startLevel(int colorCount, qint64 bestTime) QVector~QColor~
+        +abandonRound() void
+        +checkClick(QColor color, qint64 elapsedMs) ClickResult
+        +getCurrentTargetColor() QColor const
+        +state() const GameState & const
+    }
+
+    class GameState {
+        -int m_difficulty
+        -QVector~QColor~ m_sequence
+        -int m_position
+        -int m_mistakes
+        -Status m_status
+        -qint64 m_finishTime
+        -qint64 m_bestTime
+        +isValidDifficulty(int colorCount) bool$
+        +difficulty() int const
+        +cleared() int const
+        +tileCount() int const
+        +mistakes() int const
+        +status() Status const
+        +finishTime() qint64 const
+        +bestTime() qint64 const
+    }
+
+    class ScoreManager {
+        +ScoreManager(QObject *parent = nullptr)
+    }
+
+    QMainWindow <|-- MainWindow
+    QWidget <|-- HomeWidget
+    QPushButton <|-- ColorTab
+    QLabel <|-- ErrorCountLabel
+    QObject <|-- GameLogic
+    QObject <|-- ScoreManager
+
+    MainWindow *-- HomeWidget : владеет через pages
+    MainWindow *-- ErrorCountLabel : владеет через game
+    MainWindow *-- ColorTab : создает
+    MainWindow *-- GameLogic : владеет
+    GameLogic *-- GameState : хранит по значению
+    MainWindow ..> GameState : использует
+    HomeWidget ..> GameState : проверяет сложность
+```

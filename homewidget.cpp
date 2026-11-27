@@ -9,14 +9,16 @@
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QSequentialAnimationGroup>
+#include <QVBoxLayout>
 #include <QVariant>
 #include <QVariantAnimation>
-#include <QVBoxLayout>
 #include <QtNumeric>
 
 HomeWidget::HomeWidget(QWidget *parent)
-    : QWidget(parent), titleSlot(new QWidget(this)),
-      title(new QLabel(QStringLiteral("Spirit Game"), this)), cards(new QWidget(this))
+    : QWidget(parent)
+    , titleSlot(new QWidget(this))
+    , title(new QLabel(QStringLiteral("Spirt Game"), this))
+    , cards(new QWidget(this))
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(30, 26, 30, 26);
@@ -36,9 +38,9 @@ HomeWidget::HomeWidget(QWidget *parent)
     layout->addWidget(cards);
     layout->addStretch();
 
-    const std::array<QString, 3> names = {
-        QStringLiteral("Лёгкая"), QStringLiteral("Средняя"), QStringLiteral("Сложная")
-    };
+    const std::array<QString, 3> names = {QStringLiteral("Лёгкая"),
+                                          QStringLiteral("Средняя"),
+                                          QStringLiteral("Сложная")};
     for (int index = 0; index < int(names.size()); ++index) {
         const int colors = index + 2;
         auto *card = new QWidget(cards);
@@ -49,16 +51,16 @@ HomeWidget::HomeWidget(QWidget *parent)
         auto *button = new QPushButton(names[index], card);
         button->setObjectName(QStringLiteral("levelButton"));
         button->setMinimumWidth(130);
-        button->setAccessibleDescription(QStringLiteral("%1 цвета, %2 плиток")
-                                         .arg(colors).arg(colors * 4));
+        button->setAccessibleDescription(
+            QStringLiteral("%1 цвета, %2 плиток").arg(colors).arg(colors * 4));
         connect(button, &QPushButton::clicked, this, [this, colors] {
             emit difficultySelected(colors);
         });
         levelButtons[index] = button;
         auto *details = new QVBoxLayout;
         details->setSpacing(3);
-        details->addWidget(new QLabel(QStringLiteral("%1 цвета · %2 плиток")
-                                      .arg(colors).arg(colors * 4), card));
+        details->addWidget(
+            new QLabel(QStringLiteral("%1 цвета · %2 плиток").arg(colors).arg(colors * 4), card));
         auto *record = new QLabel(card);
         record->setObjectName(QStringLiteral("levelRecord"));
         levelRecords[index] = record;
