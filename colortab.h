@@ -3,6 +3,7 @@
 
 #include <QPushButton>
 #include <QColor>
+#include <QString>
 
 class ColorTab : public QPushButton
 {

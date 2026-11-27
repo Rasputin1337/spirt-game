@@ -1,5 +1,6 @@
 #include "colortab.h"
 #include <QCursor>
+#include <QSizePolicy>
 
 ColorTab::ColorTab(QColor color, QWidget *parent) : QPushButton(parent), m_color(color)
 {

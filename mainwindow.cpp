@@ -2,21 +2,23 @@
 #include "colortab.h"
 
 #include <QAction>
-#include <QDialog>
+#include <QColor>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
-#include <QPixmap>
 #include <QProgressBar>
-#include <QRandomGenerator>
-#include <QScreen>
+#include <QPushButton>
 #include <QSettings>
 #include <QStackedWidget>
+#include <QString>
 #include <QTimer>
+#include <QVariant>
 #include <QVBoxLayout>
+#include <QWidget>
+#include <QtMinMax>
 #include <algorithm>
 #include <random>
 
@@ -220,7 +222,6 @@ void MainWindow::startNewGame(int colorCount)
     difficulty = colorCount;
     cleared = 0;
     mistakes = 0;
-    photoTime = 0;
     finishTime = 0;
     bestTime = QSettings(QStringLiteral("SpiritGame"), QStringLiteral("SpiritGame"))
         .value(recordKey(difficulty), 0).toLongLong();
@@ -270,7 +271,7 @@ void MainWindow::updateRound()
 
 qint64 MainWindow::elapsedMs() const
 {
-    return finishTime > 0 ? finishTime : clock.elapsed() - photoTime;
+    return finishTime > 0 ? finishTime : clock.elapsed();
 }
 
 void MainWindow::updateStats()
@@ -307,14 +308,6 @@ void MainWindow::onTabClicked()
     auto *tile = qobject_cast<ColorTab *>(sender());
     if (!tile || pages->currentWidget() != game || gameLogic->isLevelComplete()) return;
 
-    if (QRandomGenerator::global()->bounded(100) < 5) {
-        timer->stop();
-        const qint64 shownAt = clock.elapsed();
-        showPhoto();
-        photoTime += clock.elapsed() - shownAt;
-        timer->start();
-    }
-
     if (!gameLogic->checkClick(tile->getColor())) {
         ++mistakes;
         feedback->setText(QStringLiteral("Эта плитка другого цвета. Следуй подсказке над полем."));
@@ -329,20 +322,4 @@ void MainWindow::onTabClicked()
     feedback->setText(QStringLiteral("Убирай плитки с белой рамкой."));
     updateRound();
     if (gameLogic->isLevelComplete()) finishRound();
-}
-
-void MainWindow::showPhoto()
-{
-    QDialog photoDialog(this);
-    photoDialog.setWindowTitle(QStringLiteral("photo_2026-11-19_17-05-35.jpg"));
-    QPixmap photo(QStringLiteral(":/photo_2026-11-19_17-05-35.jpg"));
-    const QSize availableSize = screen()->availableGeometry().size() * 0.8;
-    if (photo.width() > availableSize.width() || photo.height() > availableSize.height()) {
-        photo = photo.scaled(availableSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    }
-    auto *photoLabel = new QLabel(&photoDialog);
-    photoLabel->setPixmap(photo);
-    auto *photoLayout = new QVBoxLayout(&photoDialog);
-    photoLayout->addWidget(photoLabel);
-    photoDialog.exec();
 }

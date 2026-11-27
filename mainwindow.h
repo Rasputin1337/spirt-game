@@ -3,6 +3,7 @@
 
 #include <QElapsedTimer>
 #include <QMainWindow>
+#include <QtTypes>
 #include <array>
 #include "gamelogic.h"
 
@@ -26,7 +27,6 @@ private:
     void showHome();
     void startNewGame(int colorCount);
     void onTabClicked();
-    void showPhoto();
     void updateRound();
     void updateStats();
     void finishRound();
@@ -51,7 +51,6 @@ private:
     int difficulty = 2;
     int cleared = 0;
     int mistakes = 0;
-    qint64 photoTime = 0;
     qint64 bestTime = 0;
     qint64 finishTime = 0;
 };
